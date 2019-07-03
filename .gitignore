@@ -1,0 +1,11 @@
+#Pycharm Files
+**/.idea/**/*
+*.pyc
+
+#Example outputs
+Example/**/*
+!Example/*.py
+
+#Packaging artifacts
+*.egg-info
+
