@@ -22,7 +22,7 @@ class CustomSdist(sdist):
 #Package
 setuptools.setup(
     name="PsiFpgaLibDependencies",
-    version="2.0.0",
+    version="2.1.0",
     author="Oliver Bründler",
     author_email="oliver.bruendler@psi.ch",
     description="Automatic checkout of dependencies for PSI Libraries",
