@@ -4,6 +4,7 @@
 #  Authors: Oliver Bruendler
 ##############################################################################
 from .Dependency import Dependency
+from .VersionNr import VersionNr
 from typing import List
 from enum import Enum
 import os
@@ -35,8 +36,29 @@ class CHECKOUT_MODE(Enum):
     LatestRelease = 1
     SpecifiedRelease = 2
 
-class DependencyDoesNotExistException(Exception):
-    pass
+##############################################################################
+# Internal Helper Fuctions
+##############################################################################
+def CheckCompatibility(rootdir : str, dep : Dependency, printOk : bool):
+    oldDir = os.path.abspath(os.curdir)
+    try:
+        rootdir = os.path.abspath(rootdir)
+        os.chdir(rootdir)
+        os.chdir(dep.relativePath)
+        #Get current tag
+        versionFoundStr = subprocess.check_output("git describe --tags").decode().split("-")[0]
+        versionFound = VersionNr(versionFoundStr)
+        #Check Major
+        if versionFound.major > dep.minVersion.major:
+            print("WARNING: Major mismatch, maybe incompatible. Required {}, Found {}".format(dep.minVersion, versionFound))
+            return
+        if versionFound < dep.minVersion:
+            print("ERROR: Version lower than required. Required {}, Found {}".format(dep.minVersion, versionFound))
+            return
+        if printOk:
+            print("OK ({})".format(versionFound))
+    finally:
+        os.chdir(oldDir)
 
 ##############################################################################
 # Actions
@@ -49,7 +71,7 @@ def ListDependencies(deps : List[Dependency]):
     for dep in deps:
         print("{} - {} - {}".format(dep.libraryName, dep.url, dep.minVersion))
 
-def CheckIfPresent(rootdir : str, deps : List[Dependency]):
+def CheckDependency(rootdir : str, deps : List[Dependency]):
     """
     Check if all dependencies are present and throw an exception otherwise
     :param rootdir: Directory to check the dependencies relative to
@@ -59,13 +81,14 @@ def CheckIfPresent(rootdir : str, deps : List[Dependency]):
     try:
         os.chdir(rootdir)
         for dep in deps:
-            if os.path.isdir(dep.relativePath):
-                continue
+            print("-- {} --".format(dep.libraryName))
+            depPathAbs = os.path.abspath(dep.relativePath)
+            if os.path.isdir(depPathAbs):
+                CheckCompatibility(rootdir, dep, True)
             else:
-                raise DependencyDoesNotExistException("Dependency {} does not exist".format(dep.relativePath))
+                print("ERROR: Dependency {} does not exist".format(dep.relativePath))
     finally:
         os.chdir(oldDir)
-
 
 def Checkout(rootdir : str, deps : List[Dependency], mode : CHECKOUT_MODE = CHECKOUT_MODE.Master, asSubmodule : bool = False):
     """
@@ -79,10 +102,12 @@ def Checkout(rootdir : str, deps : List[Dependency], mode : CHECKOUT_MODE = CHEC
     rootdir = os.path.abspath(rootdir)
     try:
         for dep in deps:
+            print("-- {} --".format(dep.libraryName))
             os.chdir(rootdir)
             parent = os.path.abspath(dep.GetParentDir())
             if os.path.exists(dep.relativePath):
-                print("> {} skipped, already exists".format(dep.relativePath))
+                print("> skipped, already exists, checking version")
+                CheckCompatibility(rootdir, dep, True)
             else:
                 print("> checkout {}".format(dep.relativePath))
                 if not os.path.exists(parent):
@@ -100,7 +125,9 @@ def Checkout(rootdir : str, deps : List[Dependency], mode : CHECKOUT_MODE = CHEC
                     os.system("git checkout {}".format(dep.minVersion))
                 elif mode == CHECKOUT_MODE.LatestRelease:
                     os.chdir(dep.libraryName)
-                    latest = subprocess.check_output("git describe --tags").decode()
+                    tags = subprocess.check_output("git tag").decode()
+                    tagList = [VersionNr(tag.strip) for tag in tags.split("\n") if tag.strip() != ""]
+                    latest = max(tagList)
                     os.system("git checkout {}".format(latest))
     finally:
         os.chdir(oldDir)
@@ -119,16 +146,16 @@ def ExecMain(repoPath : str, dependencies : List[Dependency]):
     parser.add_argument("-mode", dest="mode", help="Checkout mode", choices=["master", "latest_release", "specified_version"], required=False, default="latest_release")
     args = parser.parse_args()
 
+
+
     if args.list:
         print("*** Dependencies ***")
         ListDependencies(dependencies)
 
     if args.check:
         print("*** Dependency Check ***")
-        try:
-            CheckIfPresent(repoPath, dependencies)
-        except Exception as e:
-            print(e)
+        CheckDependency(repoPath, dependencies)
+
 
     if args.checkout:
         print("*** Checkout ***")

@@ -4,6 +4,7 @@
 #  Authors: Oliver Bruendler
 ##############################################################################
 import os
+from .VersionNr import VersionNr
 
 class Dependency:
     """
@@ -22,7 +23,7 @@ class Dependency:
         self.libraryName = libraryName
         self.url = url
         self.relativePath = relativePath
-        self.minVersion = minVersion
+        self.minVersion = VersionNr(minVersion)
 
     def GetParentDir(self) -> str:
         """
